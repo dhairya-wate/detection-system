@@ -9,8 +9,12 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import jsonschema
 import pytest
 
-from outbox import OutboxQueue, OutboxSender, create_detection_event
-from config import BASE_DIR, CONTRACTS_DIR
+try:
+    from detection_system.outbox import OutboxQueue, OutboxSender, create_detection_event
+    from detection_system.config import BASE_DIR, CONTRACTS_DIR
+except ImportError:
+    from outbox import OutboxQueue, OutboxSender, create_detection_event
+    from config import BASE_DIR, CONTRACTS_DIR
 
 
 def get_free_port():
@@ -186,8 +190,12 @@ def test_end_to_end_detection_to_ecowing_ingestion_and_outbox_recovery(tmp_path)
     import subprocess
     import urllib.request
     import numpy as np
-    from detector import WasteDetector
-    from config import SAMPLE_DIR
+    try:
+        from detection_system.detector import WasteDetector
+        from detection_system.config import SAMPLE_DIR
+    except ImportError:
+        from detector import WasteDetector
+        from config import SAMPLE_DIR
 
     ecowing_candidates = [
         BASE_DIR.parent / "ecowing",

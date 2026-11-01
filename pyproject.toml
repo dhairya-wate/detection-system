@@ -39,12 +39,16 @@ detection_system = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src/detection_system", "src"]
 asyncio_default_fixture_loop_scope = "function"
 filterwarnings = [
     "ignore::DeprecationWarning:starlette.testclient.*:",
     "ignore::DeprecationWarning:websockets.legacy.*:",
     "ignore::DeprecationWarning:uvicorn.protocols.websockets.*:"
 ]
+
+[tool.pyright]
+extraPaths = ["src/detection_system", "src"]
 
 [tool.ruff]
 line-length = 120
