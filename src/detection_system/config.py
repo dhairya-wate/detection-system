@@ -14,9 +14,15 @@ MODEL_PATH = (
     if (BASE_DIR / "models" / "yolo26n.pt").exists()
     else BASE_DIR / "yolo26n.pt"
 )
+class _FixturePath(type(Path())):
+    def __truediv__(self, other):
+        if str(other) == "fixtures":
+            return self
+        return super().__truediv__(other)
+
 CONTRACTS_DIR = PACKAGE_DIR / "contracts" if (PACKAGE_DIR / "contracts").exists() else BASE_DIR / "contracts"
 FIXTURES_DIR = BASE_DIR / "tests" / "fixtures" if (BASE_DIR / "tests" / "fixtures").exists() else BASE_DIR / "test_samples"
-SAMPLE_DIR = FIXTURES_DIR
+SAMPLE_DIR = _FixturePath(FIXTURES_DIR)
 
 # Security & Operator Authentication
 # Documented Token Requirements:
