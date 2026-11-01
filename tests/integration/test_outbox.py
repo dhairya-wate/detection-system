@@ -10,7 +10,7 @@ import jsonschema
 import pytest
 
 from outbox import OutboxQueue, OutboxSender, create_detection_event
-from config import BASE_DIR
+from config import BASE_DIR, CONTRACTS_DIR
 
 
 def get_free_port():
@@ -55,7 +55,7 @@ class MockEcoWingHandler(BaseHTTPRequestHandler):
 
 
 def test_outbox_queue_and_schema_validation(tmp_path):
-    schema_path = BASE_DIR / "contracts" / "detection-event.schema.json"
+    schema_path = CONTRACTS_DIR / "detection-event.schema.json" if (CONTRACTS_DIR / "detection-event.schema.json").exists() else BASE_DIR / "contracts" / "detection-event.schema.json"
     with open(schema_path, "r", encoding="utf-8") as f:
         schema = json.load(f)
 

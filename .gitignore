@@ -46,6 +46,15 @@ npm-debug.log*
 *.sqlite3
 data/
 
+# Pytest & Linter Cache
+.pytest_cache/
+.ruff_cache/
+
+# Model Binaries (fetch script or volume mount)
+models/*.pt
+models/*.onnx
+!models/.gitkeep
+
 
 
 .pytest_cache/

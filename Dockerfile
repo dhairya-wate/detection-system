@@ -7,10 +7,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.lock .
+RUN pip install --no-cache-dir -r requirements.lock
 
 COPY . .
+RUN pip install --no-cache-dir --no-deps -e .
 
 EXPOSE 5000
 
@@ -18,5 +19,4 @@ ENV HOST=0.0.0.0
 ENV PORT=5000
 ENV ALLOW_LAN=true
 
-CMD ["python", "run.py"]
-
+CMD ["python", "-m", "detection_system"]

@@ -433,6 +433,7 @@ def test_contract_schema_and_taxonomy_validation():
     from pathlib import Path
 
     candidates = [
+        Path(__file__).resolve().parents[2] / "src" / "detection_system" / "contracts",
         Path(__file__).resolve().parents[2] / "contracts",
         Path(__file__).resolve().parents[1] / "contracts",
         Path(__file__).resolve().parent / "contracts",

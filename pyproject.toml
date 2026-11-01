@@ -17,10 +17,39 @@ dependencies = [
     "pydantic>=2.8.0",
     "websockets>=13.0",
     "requests>=2.32.0",
-    "python-multipart>=0.0.9"
+    "python-multipart>=0.0.9",
+    "jsonschema>=4.23.0",
+    "pyyaml>=6.0.2"
+]
+
+[project.scripts]
+detection-system = "detection_system.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+detection_system = [
+    "contracts/*",
+    "contracts/schemas/*",
+    "web/templates/*",
+    "web/static/css/*",
+    "web/static/js/*"
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_default_fixture_loop_scope = "function"
+filterwarnings = [
+    "ignore::DeprecationWarning:starlette.testclient.*:",
+    "ignore::DeprecationWarning:websockets.legacy.*:",
+    "ignore::DeprecationWarning:uvicorn.protocols.websockets.*:"
+]
 
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]

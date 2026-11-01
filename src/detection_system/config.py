@@ -7,9 +7,16 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 # Base Paths
-BASE_DIR = Path(__file__).resolve().parents[2]
-MODEL_PATH = BASE_DIR / "models" / "yolo26n.pt" if (BASE_DIR / "models" / "yolo26n.pt").exists() else BASE_DIR / "yolo26n.pt"
-SAMPLE_DIR = BASE_DIR / "test_samples"
+PACKAGE_DIR = Path(__file__).resolve().parent
+BASE_DIR = PACKAGE_DIR.parents[1]
+MODEL_PATH = (
+    BASE_DIR / "models" / "yolo26n.pt"
+    if (BASE_DIR / "models" / "yolo26n.pt").exists()
+    else BASE_DIR / "yolo26n.pt"
+)
+CONTRACTS_DIR = PACKAGE_DIR / "contracts" if (PACKAGE_DIR / "contracts").exists() else BASE_DIR / "contracts"
+FIXTURES_DIR = BASE_DIR / "tests" / "fixtures" if (BASE_DIR / "tests" / "fixtures").exists() else BASE_DIR / "test_samples"
+SAMPLE_DIR = FIXTURES_DIR
 
 # Security & Operator Authentication
 # Documented Token Requirements:

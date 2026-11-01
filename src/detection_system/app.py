@@ -107,9 +107,11 @@ def verify_operator_token(
     return x_operator_token
 
 # Paths
-BASE_DIR = Path(__file__).resolve().parents[2]
-TEMPLATES_DIR = (BASE_DIR / "templates") if (BASE_DIR / "templates").exists() else (BASE_DIR / "public")
-STATIC_DIR = (BASE_DIR / "static") if (BASE_DIR / "static").exists() else (BASE_DIR / "public" / "static")
+PACKAGE_DIR = Path(__file__).resolve().parent
+BASE_DIR = PACKAGE_DIR.parents[1]
+WEB_DIR = PACKAGE_DIR / "web"
+TEMPLATES_DIR = WEB_DIR / "templates" if (WEB_DIR / "templates").exists() else BASE_DIR / "templates"
+STATIC_DIR = WEB_DIR / "static" if (WEB_DIR / "static").exists() else BASE_DIR / "static"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 (STATIC_DIR / "css").mkdir(parents=True, exist_ok=True)
 (STATIC_DIR / "js").mkdir(parents=True, exist_ok=True)

@@ -1,3 +1,7 @@
+"""
+Entry point for running the detection system module directly:
+    python -m detection_system
+"""
 import sys
 from pathlib import Path
 
@@ -8,24 +12,18 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-# Add src and package directory to sys.path
-src_pkg = Path(__file__).resolve().parent / "src" / "detection_system"
-src_root = Path(__file__).resolve().parent / "src"
-for p in [str(src_pkg), str(src_root)]:
-    if p not in sys.path:
-        sys.path.insert(0, p)
-
 import uvicorn
-from config import DEFAULT_HOST, DEFAULT_PORT, get_local_ip, MODEL_PATH, MAX_UPLOAD_SIZE_BYTES
+from detection_system.config import (
+    DEFAULT_HOST, DEFAULT_PORT, get_local_ip, MODEL_PATH, MAX_UPLOAD_SIZE_BYTES
+)
 
 def main():
     local_ip = get_local_ip()
-    
     print("\n" + "=" * 70)
     print("  ECOWING AI WASTE DETECTION & STREAMING SERVER")
     print("=" * 70)
     print(f"  [+] Host Local IP:            {local_ip}")
-    print(f"  [+] Active YOLO Weights:      {MODEL_PATH.name}")
+    print(f"  [+] Active YOLO Weights:      {MODEL_PATH.name if MODEL_PATH.exists() else 'Not found'}")
     print("=" * 70)
     print("  HOW TO CONNECT TO YOUR ECOWING WEBSITE:")
     print("=" * 70)
@@ -41,7 +39,7 @@ def main():
     print("=" * 70 + "\n")
 
     uvicorn.run(
-        "app:app",
+        "detection_system.app:app",
         host=DEFAULT_HOST,
         port=DEFAULT_PORT,
         reload=False,
@@ -51,3 +49,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
