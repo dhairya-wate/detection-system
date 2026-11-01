@@ -189,19 +189,39 @@ def test_end_to_end_detection_to_ecowing_ingestion_and_outbox_recovery(tmp_path)
     from detector import WasteDetector
     from config import SAMPLE_DIR
 
-    ecowing_dir = BASE_DIR.parent / "EcoWing"
-    if not ecowing_dir.exists():
+    ecowing_candidates = [
+        BASE_DIR.parent / "ecowing",
+        BASE_DIR.parent / "EcoWing"
+    ]
+    ecowing_dir = next((p for p in ecowing_candidates if p.exists()), None)
+    if not ecowing_dir:
         pytest.skip("EcoWing directory not found")
 
+    command_center = (
+        ecowing_dir / "services" / "command-center"
+        if (ecowing_dir / "services" / "command-center").exists()
+        else ecowing_dir / "backend"
+        if (ecowing_dir / "backend").exists()
+        else ecowing_dir
+    )
+    node_modules = (
+        command_center / "node_modules"
+        if (command_center / "node_modules").exists()
+        else ecowing_dir / "backend" / "node_modules"
+    )
+    if not node_modules.exists():
+        pytest.skip("Command center node_modules not found")
+
     node_script = """
+    const fs = require('fs');
     const express = require('express');
     const http = require('http');
     process.env.ECOWING_OPERATOR_TOKEN = 'secure_test_operator_token_9xK2mP7qR4vL8wZ1';
     process.env.DRONE_DEVICE_TOKENS = JSON.stringify({
         'EcoWing-01': 'secure_e2e_drone_token_9xK2mP7qR4vL8wZ1'
     });
-    const droneRouter = require('./backend/routes/drone');
-    const detectionStore = require('./backend/detectionStore');
+    const droneRouter = fs.existsSync('./src/routes/drone.js') ? require('./src/routes/drone') : require('./backend/routes/drone');
+    const detectionStore = fs.existsSync('./src/detectionStore.js') ? require('./src/detectionStore') : require('./backend/detectionStore');
     const app = express();
     app.use(express.json());
     app.use('/api/drone', droneRouter);
@@ -217,10 +237,10 @@ def test_end_to_end_detection_to_ecowing_ingestion_and_outbox_recovery(tmp_path)
 
     def start_ecowing():
         env = os.environ.copy()
-        env["NODE_PATH"] = str(ecowing_dir / "backend" / "node_modules")
+        env["NODE_PATH"] = str(node_modules)
         proc = subprocess.Popen(
             ["node", "-e", node_script],
-            cwd=str(ecowing_dir),
+            cwd=str(command_center),
             env=env,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

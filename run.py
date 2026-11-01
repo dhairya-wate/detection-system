@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 
 # Ensure UTF-8 output on Windows consoles
 if sys.platform == "win32":
@@ -6,6 +7,13 @@ if sys.platform == "win32":
         sys.stdout.reconfigure(encoding='utf-8')
     except Exception:
         pass
+
+# Add src and package directory to sys.path
+src_pkg = Path(__file__).resolve().parent / "src" / "detection_system"
+src_root = Path(__file__).resolve().parent / "src"
+for p in [str(src_pkg), str(src_root)]:
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 import uvicorn
 from config import DEFAULT_HOST, DEFAULT_PORT, get_local_ip, MODEL_PATH, MAX_UPLOAD_SIZE_BYTES

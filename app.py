@@ -43,7 +43,7 @@ from fastapi import (
     FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect,
     Header, HTTPException, status, Depends, Request
 )
-from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
+from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -652,6 +652,11 @@ def mobile_page(request: Request):
     if mobile_file.exists():
         return mobile_file.read_text(encoding="utf-8")
     return "<h1>EcoWing Mobile Stream</h1>"
+
+@app.get("/mobile.html")
+def mobile_html_redirect():
+    """Redirects legacy /mobile.html requests to canonical /mobile route."""
+    return RedirectResponse(url="/mobile", status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 @app.websocket("/ws/mobile_stream")
 async def websocket_mobile_stream(websocket: WebSocket):

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ecowing-detection-system"
+version = "1.0.0"
+description = "EcoWing AI Waste Detection Sensor & Live Video Streaming Server"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "ultralytics>=8.3.0",
+    "opencv-python-headless>=4.10.0",
+    "numpy>=1.26.0",
+    "pydantic>=2.8.0",
+    "websockets>=13.0",
+    "requests>=2.32.0",
+    "python-multipart>=0.0.9"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
+

@@ -409,7 +409,12 @@ def test_fixture_dimensions_parsed_from_all_seven_real_files():
     Verifies that PNG, JPEG, GIF, BMP, WebP VP8 (lossy), WebP VP8L (lossless),
     and WebP VP8X (extended) all parse to exact dimensions (128x96) using real files.
     """
-    fixtures_dir = Path(__file__).resolve().parent / "test_samples" / "fixtures"
+    fixtures_candidates = [
+        Path(__file__).resolve().parents[2] / "test_samples" / "fixtures",
+        Path(__file__).resolve().parents[1] / "test_samples" / "fixtures",
+        Path(__file__).resolve().parent / "test_samples" / "fixtures",
+    ]
+    fixtures_dir = next((p for p in fixtures_candidates if p.exists()), fixtures_candidates[0])
     fixture_files = [
         "sample.png",
         "sample.jpg",
