@@ -254,6 +254,8 @@ def test_end_to_end_detection_to_ecowing_ingestion_and_outbox_recovery(tmp_path)
             stderr=subprocess.PIPE,
             text=True
         )
+        assert proc.stdout is not None
+        assert proc.stderr is not None
         port = None
         for _ in range(50):
             line = proc.stdout.readline()
