@@ -118,6 +118,7 @@ def test_outbox_offline_queue_and_delivery_when_ecowing_returns(tmp_path):
 
     ingest_url = f"http://127.0.0.1:{port}/api/drone/detection"
     sender = OutboxSender(
+        # pyrefly: ignore[bad-argument-type]
         queue=queue,
         ingest_url=ingest_url,
         device_token="test_device_token_drone_01_secure_12345",
@@ -304,6 +305,7 @@ def test_end_to_end_detection_to_ecowing_ingestion_and_outbox_recovery(tmp_path)
     try:
         ingest_url1 = f"http://127.0.0.1:{port1}/api/drone/detection"
         sender = OutboxSender(
+            # pyrefly: ignore[bad-argument-type]
             queue=queue,
             ingest_url=ingest_url1,
             device_token="secure_e2e_drone_token_9xK2mP7qR4vL8wZ1",

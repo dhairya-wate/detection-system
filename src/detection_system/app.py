@@ -648,11 +648,12 @@ def mobile_page(request: Request):
     if not is_secure_context(request):
         return HTMLResponse(content=SECURE_CONTEXT_REQUIRED_HTML, status_code=200)
 
-    mobile_file = TEMPLATES_DIR / "mobile.html"
-    if not mobile_file.exists():
-        mobile_file = BASE_DIR / "templates" / "mobile.html"
-    if mobile_file.exists():
-        return mobile_file.read_text(encoding="utf-8")
+    # Single unified HTML template serving both desktop and mobile broadcaster
+    index_file = TEMPLATES_DIR / "index.html"
+    if not index_file.exists():
+        index_file = BASE_DIR / "templates" / "index.html"
+    if index_file.exists():
+        return index_file.read_text(encoding="utf-8")
     return "<h1>EcoWing Mobile Stream</h1>"
 
 @app.get("/mobile.html")

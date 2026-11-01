@@ -14,6 +14,7 @@ MODEL_PATH = (
     if (BASE_DIR / "models" / "yolo26n.pt").exists()
     else BASE_DIR / "yolo26n.pt"
 )
+# pyrefly: ignore[invalid-inheritance]
 class _FixturePath(type(Path())):
     def __truediv__(self, other):
         if str(other) == "fixtures":

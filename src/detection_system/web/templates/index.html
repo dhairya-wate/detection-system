@@ -2,24 +2,282 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EcoWing | Waste Detection & Live Stream Center</title>
-  <!-- Mobile Auto-Redirect to Dedicated Mobile Broadcaster -->
-  <script>
-    if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) && !window.location.search.includes('desktop=1')) {
-      window.location.href = '/mobile';
-    }
-  </script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>EcoWing Mobile AI Camera Broadcaster &amp; Detection Center</title>
+
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- PeerJS for Direct WebRTC Live Broadcast to EcoWing Website -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
   <!-- In-Browser Real-Time AI Detection Engine -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+
+  <style>
+    /* View Switcher Top Navigation */
+    .view-switcher-bar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      background: #0b0f14;
+      border-bottom: 1px solid #1e293b;
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 8px 16px;
+    }
+    .switcher-btn {
+      background: #1e293b;
+      color: #94a3b8;
+      border: 1px solid #334155;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+    .switcher-btn:hover {
+      color: #f8fafc;
+      background: #334155;
+    }
+    .switcher-btn.active {
+      background: rgba(16, 185, 129, 0.2);
+      border-color: #10b981;
+      color: #10b981;
+    }
+
+    /* Mobile Broadcaster Scoped Layout */
+    #view-mobile {
+      display: none;
+      width: 100vw;
+      height: calc(100vh - 46px);
+      position: relative;
+      background-color: #0b0f14;
+      color: #f0f6fc;
+      overflow: hidden;
+      flex-direction: column;
+    }
+    #view-mobile.active {
+      display: flex;
+    }
+
+    #view-desktop {
+      display: block;
+    }
+    #view-desktop.hidden {
+      display: none;
+    }
+
+    .mobile-viewport {
+      position: relative;
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #mobile-camera-video { display: none; }
+    #mobile-stream-canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .mobile-top-bar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      padding: 16px 20px;
+      background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      z-index: 10;
+    }
+    .mobile-brand-title {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mobile-brand-title span { color: #10b981; }
+
+    .mobile-status-pill {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 5px 12px;
+      border-radius: 20px;
+      background: rgba(16, 185, 129, 0.2);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .mobile-status-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+
+    .mobile-detection-banner {
+      position: absolute;
+      bottom: 115px; left: 16px; right: 16px;
+      background: rgba(22, 27, 34, 0.92);
+      backdrop-filter: blur(10px);
+      border: 1px solid #30363d;
+      border-radius: 14px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      z-index: 10;
+    }
+    .mobile-banner-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .mobile-item-name {
+      font-weight: 800;
+      font-size: 15px;
+      color: #f0f6fc;
+    }
+    .mobile-badge-tags { display: flex; gap: 6px; }
+    .mobile-mini-tag {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 6px;
+      text-transform: uppercase;
+    }
+    .tag-rec-yes { background: rgba(16, 185, 129, 0.25); color: #10b981; }
+    .tag-rec-no { background: rgba(239, 68, 68, 0.25); color: #ef4444; }
+    .tag-bio-yes { background: rgba(52, 211, 153, 0.25); color: #34d399; }
+    .tag-bio-no { background: rgba(148, 163, 184, 0.25); color: #94a3b8; }
+    .mobile-bin-info { font-size: 12px; color: #8b949e; }
+
+    .mobile-bottom-bar {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      padding: 20px 24px 30px;
+      background: linear-gradient(0deg, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.5) 70%, rgba(0,0,0,0) 100%);
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      z-index: 10;
+    }
+    .mobile-btn-circle {
+      width: 52px; height: 52px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      backdrop-filter: blur(8px);
+      transition: transform 0.15s, background 0.2s;
+    }
+    .mobile-btn-circle:active {
+      transform: scale(0.92);
+      background: rgba(16, 185, 129, 0.4);
+    }
+    .mobile-btn-circle svg { width: 24px; height: 24px; }
+    .mobile-btn-stream {
+      width: 70px; height: 70px;
+      background: #10b981;
+      border: 3px solid #fff;
+      box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+    }
+    .mobile-btn-stream.streaming {
+      background: #ef4444;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+    }
+
+    .mobile-splash-screen {
+      position: absolute;
+      inset: 0;
+      background: #0b0f14;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      text-align: center;
+      z-index: 100;
+      gap: 18px;
+    }
+    .mobile-splash-icon { font-size: 56px; }
+    .mobile-splash-title { font-size: 22px; font-weight: 800; }
+    .mobile-splash-text { font-size: 14px; color: #8b949e; line-height: 1.5; max-width: 380px; }
+    .mobile-btn-start {
+      background: #10b981;
+      color: #fff;
+      border: none;
+      padding: 16px 36px;
+      border-radius: 30px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+      margin-top: 10px;
+    }
+
+    .mobile-screen-off-overlay {
+      position: absolute;
+      inset: 0;
+      background-color: #000000;
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .mobile-screen-off-overlay.active { display: flex; }
+    .mobile-screen-off-hint {
+      color: rgba(255, 255, 255, 0.2);
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      pointer-events: none;
+      animation: fadeOutHint 4s forwards;
+    }
+  </style>
 </head>
 <body>
-  <div class="app-container">
+
+  <!-- Top View Switcher Navigation -->
+  <nav class="view-switcher-bar">
+    <button id="btn-switch-desktop" class="switcher-btn active" onclick="switchView('desktop')">
+      🖥️ Desktop Command Center
+    </button>
+    <button id="btn-switch-mobile" class="switcher-btn" onclick="switchView('mobile')">
+      📱 EcoWing Mobile Broadcaster
+    </button>
+  </nav>
+
+  <!-- ========================================== -->
+  <!-- 1. DESKTOP OPERATOR & DETECTION CONSOLE    -->
+  <!-- ========================================== -->
+  <div id="view-desktop" class="app-container">
     <!-- Header -->
     <header class="app-header">
       <div class="brand-group">
@@ -31,7 +289,7 @@
         </div>
         <div>
           <h1 class="brand-title">EcoWing <span>AI Detection</span></h1>
-          <p class="brand-subtitle">Automated Waste Sorting & Live Website Streaming</p>
+          <p class="brand-subtitle">Automated Waste Sorting, EcoWing Mobile Streaming &amp; Control</p>
         </div>
       </div>
 
@@ -48,7 +306,7 @@
       </div>
     </header>
 
-    <!-- Backend Connection Bar for Vercel / Remote Hosting -->
+    <!-- Backend Connection Bar for Remote Hosting -->
     <div class="backend-banner" id="backend-banner" style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;">
       <div style="display: flex; align-items: center; gap: 10px;">
         <span style="font-size: 18px;">🔌</span>
@@ -58,7 +316,7 @@
         </div>
       </div>
       <div style="display: flex; gap: 8px; flex: 1; max-width: 580px; min-width: 280px;">
-        <input type="text" id="input-backend-url" placeholder="e.g. https://your-tunnel.loca.lt or http://localhost:5000" style="padding: 7px 12px; font-size: 12px; font-family: monospace;" />
+        <input type="text" id="input-backend-url" placeholder="e.g. http://localhost:5000" style="padding: 7px 12px; font-size: 12px; font-family: monospace;" />
         <button class="btn btn-primary btn-sm" id="btn-connect-backend" style="white-space: nowrap;">Connect Stream</button>
       </div>
     </div>
@@ -69,7 +327,7 @@
         <span style="font-size: 18px;">🔐</span>
         <div>
           <div style="font-size: 13px; font-weight: 700; color: #93c5fd;">Operator Security Authentication</div>
-          <div style="font-size: 11px; color: #94a3b8;">Required for settings &amp; uploads. Stored strictly in-memory for this session (never saved to localStorage).</div>
+          <div style="font-size: 11px; color: #94a3b8;">Required for settings &amp; uploads. Stored strictly in-memory for this session.</div>
         </div>
       </div>
       <div style="display: flex; gap: 8px; align-items: center;">
@@ -129,7 +387,6 @@
       <div class="stream-panel">
         <div class="panel-header">
           <div class="panel-title">
-            <!-- Mode Switcher Tabs -->
             <div style="display: flex; gap: 8px;">
               <button class="btn btn-primary btn-xs mode-tab-btn active" id="tab-mode-camera">
                 📷 Run Device Camera
@@ -150,29 +407,12 @@
           </div>
         </div>
 
-        <!-- Video Viewport: Supports both local device camera <canvas> and incoming <img id="stream-img"> -->
         <div class="video-container" id="video-wrapper">
-          <!-- Local Device Camera Video Element (Hidden offscreen, rendered with AI boxes onto canvas) -->
           <video id="device-video" autoplay playsinline muted style="display: none;"></video>
-          <!-- Annotated AI Canvas (shows camera + glowing bounding boxes + classification tags) -->
           <canvas id="annotated-canvas" style="width: 100%; height: 100%; object-fit: contain; display: block;"></canvas>
           <canvas id="device-canvas" style="display: none;"></canvas>
-
-          <!-- Remote / AI Stream Element -->
           <img id="stream-img" src="/video_feed" alt="EcoWing Detection Live Stream" style="display: none; width: 100%; height: 100%; object-fit: contain;" />
-          
           <div class="stream-overlay-tag" id="live-camera-tag">AI WASTE DETECTOR READY</div>
-        </div>
-
-        <!-- Destination Stream Relayer Bar -->
-        <div style="background: #11161d; padding: 12px 18px; border-bottom: 1px solid var(--border-color); display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between;">
-          <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 260px;">
-            <span style="font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Relay Stream To Website:</span>
-            <input type="text" id="target-website-url" placeholder="e.g. http://localhost:3000" style="padding: 6px 10px; font-size: 11px; font-family: monospace; flex: 1;" />
-          </div>
-          <button class="btn btn-primary btn-sm" id="btn-start-relay" style="white-space: nowrap;">
-            🔴 Stream to Other Website
-          </button>
         </div>
 
         <!-- Controls Row -->
@@ -198,107 +438,45 @@
           </div>
           
           <div id="custom-source-row" class="custom-source-row hidden">
-            <input type="text" id="custom-source-input" placeholder="e.g. rtsp://192.168.1.50:554/ch0 or C:\path\test.mp4" />
+            <input type="text" id="custom-source-url" placeholder="rtsp://... or https://... or sample.mp4" />
+            <button class="btn btn-primary btn-sm" id="btn-apply-custom">Load Stream</button>
           </div>
-          <div id="settings-status-msg" style="margin-top: 10px; font-size: 12px; font-weight: 600;"></div>
+        </div>
+
+        <!-- Mobile Phone Pairing Box -->
+        <div class="mobile-sync-card" style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 16px 20px; margin-top: 16px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <h4 style="font-size: 14px; font-weight: 700; color: #10b981; display: flex; align-items: center; gap: 6px;">
+                📱 EcoWing Mobile Camera Broadcaster
+              </h4>
+              <p style="font-size: 12px; color: #94a3b8; margin-top: 2px;">
+                Pair your mobile device camera to stream real-time waste frames directly to this detector.
+              </p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-primary btn-sm" id="btn-gen-pairing-code" style="white-space: nowrap;">
+                Generate Pairing Code
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="switchView('mobile')" style="white-space: nowrap;">
+                Open Mobile Broadcaster
+              </button>
+            </div>
+          </div>
+          <div id="pairing-code-box" style="display: none; background: #0b0f14; border: 1px dashed #334155; border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 11px; color: #94a3b8; text-transform: uppercase;">8-Character Single-Use Pairing Code:</div>
+            <div id="pairing-code-display" style="font-size: 26px; font-weight: 800; font-family: 'JetBrains Mono', monospace; color: #38bdf8; letter-spacing: 4px; margin: 4px 0;">
+              --------
+            </div>
+            <div style="font-size: 11px; color: #64748b;">
+              Valid for 5 minutes. Enter this code on the mobile stream console.
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Right Column: Integration & Active Objects -->
+      <!-- Right Column: Live Detection Items & Instant File Test -->
       <div class="sidebar-panel">
-        <!-- Mobile Stream Card -->
-        <div class="connect-card mobile-card">
-          <div class="connect-header">
-            <div class="connect-title-group">
-              <span class="connect-icon">📱</span>
-              <div>
-                <h3>Stream From Mobile Phone</h3>
-                <p>Use your phone camera as a wireless AI waste scanner</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="mobile-connect-box">
-            <div class="endpoint-label">OPEN ON YOUR PHONE BROWSER:</div>
-            <div class="copy-input-group">
-              <input type="text" readonly id="input-mobile-url" value="http://.../mobile">
-              <button class="btn btn-copy" onclick="copyText('input-mobile-url')">Copy URL</button>
-            </div>
-            <div class="qr-container">
-              <img id="qr-code-img" src="" alt="Scan QR with Phone" class="qr-img hidden" />
-              <div class="qr-hint">Scan with your phone camera or visit link on same Wi-Fi</div>
-            </div>
-            <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
-              <button class="btn btn-secondary btn-sm" id="btn-gen-pairing-code" style="width: 100%;">🔑 Generate Mobile Pairing Code</button>
-              <div id="pairing-code-display" style="margin-top: 8px; font-size: 12px; font-weight: 700; text-align: center;"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Website Connection Card (Top Priority) -->
-        <div class="connect-card">
-          <div class="connect-header">
-            <div class="connect-title-group">
-              <span class="connect-icon">🌐</span>
-              <div>
-                <h3>Connect to EcoWing Website</h3>
-                <p>Embed this live stream into your website with your IP address</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="endpoint-box">
-            <div class="endpoint-label">LIVE STREAM LINK (MJPEG)</div>
-            <div class="copy-input-group">
-              <input type="text" readonly id="input-stream-url" value="http://.../video_feed">
-              <button class="btn btn-copy" onclick="copyText('input-stream-url')">Copy Link</button>
-            </div>
-          </div>
-
-          <div class="endpoint-box">
-            <div class="endpoint-label">REST API (JSON TELEMETRY)</div>
-            <div class="copy-input-group">
-              <input type="text" readonly id="input-api-url" value="http://.../api/detections">
-              <button class="btn btn-copy" onclick="copyText('input-api-url')">Copy API</button>
-            </div>
-          </div>
-
-          <!-- Snippet Tabs -->
-          <div class="tabs-header">
-            <button class="tab-btn active" data-tab="tab-html">HTML &lt;img&gt;</button>
-            <button class="tab-btn" data-tab="tab-react">React / Next.js</button>
-            <button class="tab-btn" data-tab="tab-js">Fetch API (JS)</button>
-          </div>
-
-          <div class="tab-content active" id="tab-html">
-            <pre><code id="code-html">&lt;img 
-  src="/video_feed" 
-  alt="EcoWing Waste Detection Stream" 
-  style="width: 100%; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);" 
-/&gt;</code></pre>
-            <button class="btn btn-secondary btn-xs" onclick="copyText('code-html', true)">Copy Snippet</button>
-          </div>
-
-          <div class="tab-content" id="tab-react">
-            <pre><code id="code-react">&lt;img 
-  src="/video_feed" 
-  alt="EcoWing Stream" 
-  className="w-full rounded-2xl border border-emerald-500/20 shadow-xl"
-/&gt;</code></pre>
-            <button class="btn btn-secondary btn-xs" onclick="copyText('code-react', true)">Copy Snippet</button>
-          </div>
-
-          <div class="tab-content" id="tab-js">
-            <pre><code id="code-js">// Fetch live detection results on EcoWing website:
-async function getWasteTelemetry() {
-  const res = await fetch("/api/detections");
-  const data = await res.json();
-  console.log(data.data.items);
-}</code></pre>
-            <button class="btn btn-secondary btn-xs" onclick="copyText('code-js', true)">Copy Snippet</button>
-          </div>
-        </div>
-
         <!-- Real-time Detected Items Feed -->
         <div class="items-card">
           <div class="items-header">
@@ -332,7 +510,317 @@ async function getWasteTelemetry() {
     </main>
   </div>
 
+
+  <!-- ========================================== -->
+  <!-- 2. ECOWING MOBILE BROADCASTER CONSOLE      -->
+  <!-- ========================================== -->
+  <div id="view-mobile">
+    <!-- Pairing Code Modal / Splash -->
+    <div class="mobile-splash-screen" id="mobile-splash-screen">
+      <div class="mobile-splash-icon">🌱</div>
+      <h2 class="mobile-splash-title">EcoWing Mobile Streamer</h2>
+      <p class="mobile-splash-text">
+        Connect your camera to the EcoWing Detection System. Enter the 8-character pairing code generated by the operator console.
+      </p>
+      <div style="margin: 14px 0; width: 100%; max-width: 320px;">
+        <input type="text" id="mobile-input-pairing-code" placeholder="8-CHAR PAIRING CODE" maxlength="8" autocomplete="off" autocapitalize="characters" style="width: 100%; padding: 12px; font-size: 16px; font-weight: 700; font-family: 'JetBrains Mono', monospace; text-transform: uppercase; text-align: center; border-radius: 8px; border: 1px solid #334155; background: #0f172a; color: #38bdf8; letter-spacing: 2px;" />
+        <div id="mobile-pairing-err-msg" style="color: #ef4444; font-size: 12px; margin-top: 8px; min-height: 18px;"></div>
+      </div>
+      <button class="mobile-btn-start" id="btn-mobile-start-camera">Pair &amp; Connect Camera</button>
+      <button onclick="switchView('desktop')" style="background: transparent; border: none; color: #94a3b8; font-size: 13px; margin-top: 12px; cursor: pointer;">
+        ← Back to Desktop Console
+      </button>
+    </div>
+
+    <!-- AMOLED Screen Off / Blackout Layer -->
+    <div class="mobile-screen-off-overlay" id="mobile-screen-off-layer">
+      <div class="mobile-screen-off-hint" id="mobile-screen-off-hint">
+        🔒 Screen-Off AMOLED Mode Active<br>
+        Broadcasting live to EcoWing<br>
+        <small style="font-size: 11px; opacity: 0.7;">(Double-tap anywhere to wake)</small>
+      </div>
+    </div>
+
+    <!-- Mobile Viewport -->
+    <div class="mobile-viewport">
+      <video id="mobile-camera-video" autoplay playsinline muted></video>
+      <canvas id="mobile-stream-canvas"></canvas>
+
+      <!-- Top Bar -->
+      <div class="mobile-top-bar">
+        <div class="mobile-brand-title">
+          EcoWing <span>Mobile Broadcaster</span>
+        </div>
+        <div class="mobile-status-pill" id="mobile-status-pill">
+          <span class="mobile-status-dot"></span>
+          <span id="mobile-status-text">INITIALIZING...</span>
+        </div>
+      </div>
+
+      <!-- Live Waste Result Banner -->
+      <div class="mobile-detection-banner" id="mobile-detection-banner">
+        <div class="mobile-banner-header">
+          <span class="mobile-item-name" id="mobile-banner-name">AI Waste Scanner Active</span>
+          <div class="mobile-badge-tags" id="mobile-banner-tags"></div>
+        </div>
+        <div class="mobile-bin-info" id="mobile-banner-bin">Aim camera at bottle, can, paper, cardboard, or food scrap</div>
+      </div>
+
+      <!-- Bottom Controls -->
+      <div class="mobile-bottom-bar">
+        <!-- Camera Flip -->
+        <button class="mobile-btn-circle" id="btn-mobile-flip" title="Switch Camera">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M20 10c0-4.418-3.582-8-8-8s-8 3.582-8 8c0 1.5.4 2.9 1.1 4.1L3 17h5v-5l-1.9 1.9C5.4 12.8 5 11.5 5 10c0-3.866 3.134-7 7-7s7 3.134 7 7-3.134 7-7 7v2c4.418 0 8-3.582 8-8Z"/>
+          </svg>
+        </button>
+
+        <!-- AMOLED Screen Off Mode -->
+        <button class="mobile-btn-circle" id="btn-mobile-screen-off" title="Turn Screen Black">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>
+          </svg>
+        </button>
+
+        <!-- Stream Toggle -->
+        <button class="mobile-btn-circle mobile-btn-stream" id="btn-mobile-stream" title="Pause/Resume Stream">
+          <svg id="mobile-stream-icon-stop" viewBox="0 0 24 24" fill="currentColor" style="width: 28px; height: 28px;">
+            <rect x="6" y="6" width="12" height="12" rx="2" />
+          </svg>
+          <svg id="mobile-stream-icon-play" viewBox="0 0 24 24" fill="currentColor" style="display:none; width: 28px; height: 28px;">
+            <polygon points="5,3 19,12 5,21" />
+          </svg>
+        </button>
+
+        <!-- Torch / Flashlight -->
+        <button class="mobile-btn-circle" id="btn-mobile-torch" title="Toggle Flashlight">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shared Desktop Scripts -->
   <script src="/static/js/main.js"></script>
+
+  <!-- View Switcher & Mobile Broadcaster Logic -->
+  <script>
+    function switchView(mode) {
+      const desktopView = document.getElementById('view-desktop');
+      const mobileView = document.getElementById('view-mobile');
+      const btnDesk = document.getElementById('btn-switch-desktop');
+      const btnMob = document.getElementById('btn-switch-mobile');
+
+      if (mode === 'mobile') {
+        desktopView.classList.add('hidden');
+        mobileView.classList.add('active');
+        btnDesk.classList.remove('active');
+        btnMob.classList.add('active');
+      } else {
+        desktopView.classList.remove('hidden');
+        mobileView.classList.remove('active');
+        btnDesk.classList.add('active');
+        btnMob.classList.remove('active');
+      }
+    }
+
+    // Auto-detect mode from URL query (?mode=mobile or path /mobile)
+    if (window.location.pathname.startsWith('/mobile') || window.location.search.includes('mode=mobile') || 
+        (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.location.search.includes('desktop=1'))) {
+      switchView('mobile');
+    }
+
+    // Mobile Broadcaster Engine
+    (function initMobileBroadcaster() {
+      const v = document.getElementById('mobile-camera-video');
+      const c = document.getElementById('mobile-stream-canvas');
+      if (!v || !c) return;
+      const ctx = c.getContext('2d');
+      const splash = document.getElementById('mobile-splash-screen');
+      const btnStart = document.getElementById('btn-mobile-start-camera');
+      const btnFlip = document.getElementById('btn-mobile-flip');
+      const btnStream = document.getElementById('btn-mobile-stream');
+      const btnTorch = document.getElementById('btn-mobile-torch');
+      const btnScreenOff = document.getElementById('btn-mobile-screen-off');
+      const screenOffLayer = document.getElementById('mobile-screen-off-layer');
+      const statusText = document.getElementById('mobile-status-text');
+      const statusPill = document.getElementById('mobile-status-pill');
+      const bannerName = document.getElementById('mobile-banner-name');
+      const bannerTags = document.getElementById('mobile-banner-tags');
+      const bannerBin = document.getElementById('mobile-banner-bin');
+      const iconPlay = document.getElementById('mobile-stream-icon-play');
+      const iconStop = document.getElementById('mobile-stream-icon-stop');
+      const inputPairingCode = document.getElementById('mobile-input-pairing-code');
+      const pairingErrMsg = document.getElementById('mobile-pairing-err-msg');
+
+      let currentStream = null;
+      let facingMode = 'environment';
+      let isBroadcasting = true;
+      let track = null;
+      let torchOn = false;
+      let lastTap = 0;
+      let aiModel = null;
+      let mobileWs = null;
+      let mobileWsAuthenticated = false;
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const prefillCode = urlParams.get('code');
+      if (prefillCode && inputPairingCode) {
+        inputPairingCode.value = prefillCode.trim().toUpperCase();
+      }
+
+      if (btnStart) {
+        btnStart.addEventListener('click', async () => {
+          const code = (inputPairingCode ? inputPairingCode.value.trim().toUpperCase() : "");
+          if (!code || code.length !== 8) {
+            if (pairingErrMsg) pairingErrMsg.textContent = "Please enter an 8-character pairing code.";
+            return;
+          }
+          if (pairingErrMsg) pairingErrMsg.textContent = "Exchanging code...";
+
+          try {
+            const res = await fetch("/api/mobile/exchange", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ code: code })
+            });
+            if (!res.ok) {
+              const errData = await res.json().catch(() => ({}));
+              if (pairingErrMsg) pairingErrMsg.textContent = errData.detail || "Invalid or expired pairing code.";
+              return;
+            }
+            const data = await res.json();
+            const sessionToken = data.session_token;
+
+            const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+            const wsUrl = `${proto}//${window.location.host}/ws/mobile_stream`;
+            mobileWs = new WebSocket(wsUrl);
+
+            mobileWs.onopen = () => {
+              mobileWs.send(JSON.stringify({ type: "auth", session: sessionToken }));
+            };
+
+            mobileWs.onmessage = (event) => {
+              try {
+                const msg = JSON.parse(event.data);
+                if (msg.type === "auth_ok") {
+                  mobileWsAuthenticated = true;
+                  if (statusText) statusText.textContent = "STREAM CONNECTED";
+                  if (statusPill) statusPill.style.borderColor = "#10b981";
+                }
+              } catch (e) {}
+            };
+
+            mobileWs.onclose = () => {
+              mobileWsAuthenticated = false;
+              if (statusText) statusText.textContent = "OFFLINE (DISCONNECTED)";
+              if (statusPill) statusPill.style.borderColor = "#ef4444";
+            };
+
+            if (splash) splash.style.display = 'none';
+            await startCamera();
+
+            setInterval(() => {
+              if (!mobileWs || !mobileWsAuthenticated || !isBroadcasting || c.width === 0) return;
+              c.toBlob((blob) => {
+                if (blob && mobileWs && mobileWs.readyState === WebSocket.OPEN) {
+                  blob.arrayBuffer().then((buffer) => {
+                    mobileWs.send(buffer);
+                  });
+                }
+              }, "image/jpeg", 0.65);
+            }, 80);
+
+          } catch (err) {
+            if (pairingErrMsg) pairingErrMsg.textContent = "Connection error: " + err.message;
+          }
+        });
+      }
+
+      async function startCamera() {
+        if (currentStream) {
+          currentStream.getTracks().forEach(t => t.stop());
+        }
+        const constraints = {
+          video: { facingMode: { ideal: facingMode }, width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24 } },
+          audio: false
+        };
+        try {
+          currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+          v.srcObject = currentStream;
+          await v.play();
+          track = currentStream.getVideoTracks()[0];
+          c.width = 640;
+          c.height = 480;
+          requestAnimationFrame(processFrame);
+        } catch (err) {
+          alert("Camera permission denied: " + err.message);
+        }
+      }
+
+      async function processFrame() {
+        if (v.readyState === 4) {
+          const w = v.videoWidth || 640;
+          const h = v.videoHeight || 480;
+          if (c.width !== w || c.height !== h) {
+            c.width = w; c.height = h;
+          }
+          ctx.drawImage(v, 0, 0, w, h);
+        }
+        requestAnimationFrame(processFrame);
+      }
+
+      if (btnFlip) {
+        btnFlip.addEventListener('click', async () => {
+          facingMode = facingMode === 'environment' ? 'user' : 'environment';
+          await startCamera();
+        });
+      }
+
+      if (btnTorch) {
+        btnTorch.addEventListener('click', async () => {
+          if (track && track.getCapabilities && track.getCapabilities().torch) {
+            torchOn = !torchOn;
+            try {
+              await track.applyConstraints({ advanced: [{ torch: torchOn }] });
+              btnTorch.style.color = torchOn ? '#f59e0b' : '#fff';
+            } catch (e) {}
+          } else {
+            alert("Torch not supported on this camera/browser.");
+          }
+        });
+      }
+
+      if (btnScreenOff && screenOffLayer) {
+        btnScreenOff.addEventListener('click', () => {
+          screenOffLayer.classList.add('active');
+        });
+        screenOffLayer.addEventListener('click', () => {
+          const now = Date.now();
+          if (now - lastTap < 400) screenOffLayer.classList.remove('active');
+          else lastTap = now;
+        });
+      }
+
+      if (btnStream) {
+        btnStream.addEventListener('click', () => {
+          isBroadcasting = !isBroadcasting;
+          if (isBroadcasting) {
+            btnStream.classList.add('streaming');
+            if (iconPlay) iconPlay.style.display = 'none';
+            if (iconStop) iconStop.style.display = 'block';
+            if (statusText) statusText.textContent = "BROADCASTING LIVE";
+          } else {
+            btnStream.classList.remove('streaming');
+            if (iconPlay) iconPlay.style.display = 'block';
+            if (iconStop) iconStop.style.display = 'none';
+            if (statusText) statusText.textContent = "PAUSED";
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>
-
