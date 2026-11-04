@@ -82,6 +82,49 @@ def test_startup_fails_without_ecowing_api_url_in_production():
     assert proc.returncode != 0
     assert "CRITICAL SECURITY CONFIGURATION ERROR: ECOWING_API_URL is unset in production mode" in proc.stderr
 
+def test_startup_succeeds_with_valid_service_token():
+    """Server succeeds fast on startup when DETECTION_SERVICE_TOKEN has at least 32 high-entropy characters."""
+    env = os.environ.copy()
+    env["DETECTION_SERVICE_TOKEN"] = "valid_service_token_32chars_long_entropy_99"
+    env["DETECTION_OPERATOR_TOKEN"] = TEST_OPERATOR_TOKEN
+    env["DETECTION_ENV"] = "development"
+    env["ECOWING_API_URL"] = "http://127.0.0.1:8080"
+    proc = subprocess.run(
+        [sys.executable, "-c", "import config; assert config.DETECTION_SERVICE_TOKEN == 'valid_service_token_32chars_long_entropy_99'"],
+        env=env,
+        capture_output=True,
+        text=True
+    )
+    assert proc.returncode == 0
+
+def test_startup_fails_when_development_mode_binds_to_non_loopback():
+    """Server fails fast if DETECTION_ENV=development attempts to bind to non-loopback interface (0.0.0.0 or LAN)."""
+    env = os.environ.copy()
+    env["DETECTION_ENV"] = "development"
+    env["HOST"] = "0.0.0.0"
+    proc = subprocess.run(
+        [sys.executable, "-c", "import config"],
+        env=env,
+        capture_output=True,
+        text=True
+    )
+    assert proc.returncode != 0
+    assert "DETECTION_ENV=development is strictly restricted to loopback" in proc.stderr
+
+def test_config_missing_warning_banner_rendered():
+    """The web template includes the config-missing-warning banner element for runtime notification."""
+    template_path = Path(__file__).resolve().parent.parent.parent / "src" / "detection_system" / "web" / "templates" / "index.html"
+    content = template_path.read_text(encoding="utf-8")
+    assert 'id="config-missing-warning"' in content
+    assert 'class="config-missing-warning"' in content
+
+def test_config_missing_warning_banner_rendered():
+    """The web template includes the config-missing-warning banner element for runtime notification."""
+    template_path = Path(__file__).resolve().parent.parent.parent / "src" / "detection_system" / "web" / "templates" / "index.html"
+    content = template_path.read_text(encoding="utf-8")
+    assert 'id="config-missing-warning"' in content
+    assert 'class="config-missing-warning"' in content
+
 def test_error_message_does_not_contain_secret_values():
     """Startup validation error messages must name the missing variable but never leak secret values."""
     env = os.environ.copy()
@@ -99,7 +142,11 @@ def test_error_message_does_not_contain_secret_values():
     assert secret_canary not in proc.stdout
 
 def test_no_hardcoded_secrets_in_codebase():
-    """Verify that no hardcoded secret-like string of 20+ characters remains in src/ or tests/ (outside documented fixtures)."""
+    """Verify that no hardcoded secret-like string of 20+ characters remains in src/ or tests/ (outside documented fixtures).
+    
+    NOTE: This grep check is a basic heuristic smoke test to catch obvious accidental commits of high-entropy tokens.
+    It is a smoke test only and does NOT prove the absolute absence of secrets (e.g. obfuscated, encrypted, or external secrets).
+    """
     import re
     root_dir = Path(__file__).resolve().parent.parent.parent
     src_dir = root_dir / "src"
@@ -108,6 +155,7 @@ def test_no_hardcoded_secrets_in_codebase():
     allowed_fixture_tokens = {
         "secure_test_operator_token_9xK2mP7qR4vL8wZ1",
         "secure_test_service_token_8vK3mP7qR4vL8wZ2",
+        "valid_service_token_32chars_long_entropy_99",
         "test_device_token_drone_01_secure_12345",
         "secure_e2e_drone_token_9xK2mP7qR4vL8wZ1",
         "unknown_session_token_1234567890",
@@ -121,7 +169,8 @@ def test_no_hardcoded_secrets_in_codebase():
         "active_mobile_websockets",
         "allowed_property_values",
         "12345678-1234-4234-8234-123456789abc",
-        "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef"
+        "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef",
+        "config-missing-warning"
     }
 
     token_regex = re.compile(r'["\']([A-Za-z0-9_\-]{20,})["\']')
@@ -761,6 +810,8 @@ def test_network_defaults_and_localhost_binding():
     )
     env_lan = os.environ.copy()
     env_lan["ALLOW_LAN"] = "true"
+    env_lan["DETECTION_ENV"] = "production"
+    env_lan["ECOWING_API_URL"] = "http://127.0.0.1:8080"
     env_lan.pop("HOST", None)
     res_lan = subprocess.run([sys.executable, "-c", code_lan], env=env_lan, capture_output=True, text=True)
     assert res_lan.returncode == 0, f"ALLOW_LAN config failed: {res_lan.stderr}"

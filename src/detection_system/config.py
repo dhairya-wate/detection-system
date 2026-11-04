@@ -85,6 +85,13 @@ TRUSTED_PROXIES = {p.strip().lower() for p in _raw_proxies.split(",") if p.strip
 ALLOW_LAN = os.getenv("ALLOW_LAN", "").lower() in ["true", "1", "yes"]
 DEFAULT_HOST = os.getenv("HOST", "0.0.0.0" if ALLOW_LAN else "127.0.0.1")
 DEFAULT_PORT = int(os.getenv("PORT", "5000"))
+
+# Enforce loopback binding restriction for development environment mode
+if IS_DEVELOPMENT and DEFAULT_HOST not in ["127.0.0.1", "localhost"]:
+    raise RuntimeError(
+        f"CRITICAL SECURITY CONFIGURATION ERROR: DETECTION_ENV=development is strictly restricted to loopback (127.0.0.1). "
+        f"Cannot bind to non-loopback address '{DEFAULT_HOST}' in development mode."
+    )
 DEFAULT_SOURCE = os.getenv("DETECTION_SOURCE", os.getenv("VIDEO_SOURCE", "simulator"))
 DETECTION_MAX_FPS = float(os.getenv("DETECTION_MAX_FPS", "5.0"))
 DETECTION_STALE_AFTER_SECONDS = float(os.getenv("DETECTION_STALE_AFTER_SECONDS", "5.0"))
