@@ -1,0 +1,23 @@
+{
+  "buildCommand": null,
+  "outputDirectory": "src/detection_system/web",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/mobile",
+      "destination": "/templates/index.html"
+    },
+    {
+      "source": "/mobile.html",
+      "destination": "/templates/index.html"
+    },
+    {
+      "source": "/static/(.*)",
+      "destination": "/static/$1"
+    },
+    {
+      "source": "/",
+      "destination": "/templates/index.html"
+    }
+  ]
+}
