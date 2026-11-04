@@ -15,6 +15,9 @@
   <!-- In-Browser Real-Time AI Detection Engine -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+  <script>
+    window.DETECTION_CONFIG = window.DETECTION_CONFIG || { apiBase: "" };
+  </script>
 
   <style>
     /* View Switcher Top Navigation */
