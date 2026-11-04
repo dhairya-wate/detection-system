@@ -59,8 +59,24 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   loadAIModel();
 
-  // Backend URL handling
-  const serverConfig = window.DETECTION_CONFIG || window.DASHBOARD_CONFIG || {};
+  // Configuration Error Banner Display Helper
+  function showConfigErrorBanner(message) {
+    const banner = document.getElementById("config-missing-warning");
+    if (banner) {
+      if (message) {
+        banner.textContent = message;
+      }
+      banner.style.display = "block";
+    }
+  }
+
+  // Backend URL handling & Configuration Verification
+  const rawConfig = window.DETECTION_CONFIG || window.DASHBOARD_CONFIG;
+  const isConfigMissing = !rawConfig || (typeof rawConfig === "object" && Object.keys(rawConfig).length === 0);
+  if (isConfigMissing) {
+    showConfigErrorBanner("Configuration Missing: Could not connect to detection server or obtain required configuration. Please check your network connection, ensure the server is running, and reload the page.");
+  }
+  const serverConfig = rawConfig || {};
   const isStandaloneMode = Boolean(serverConfig.standalone);
   let backendUrl = localStorage.getItem("ecowing_backend_url") || "";
   

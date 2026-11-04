@@ -112,18 +112,76 @@ def test_startup_fails_when_development_mode_binds_to_non_loopback():
     assert "DETECTION_ENV=development is strictly restricted to loopback" in proc.stderr
 
 def test_config_missing_warning_banner_rendered():
-    """The web template includes the config-missing-warning banner element for runtime notification."""
-    template_path = Path(__file__).resolve().parent.parent.parent / "src" / "detection_system" / "web" / "templates" / "index.html"
+    """
+    Verifies that:
+    1. The HTML template contains the #config-missing-warning banner element.
+    2. When main.js executes in a DOM environment where window.DETECTION_CONFIG is missing/empty,
+       showConfigErrorBanner() is called and banner style.display becomes 'block'.
+    """
+    template_path = BASE_DIR / "src" / "detection_system" / "web" / "templates" / "index.html"
     content = template_path.read_text(encoding="utf-8")
     assert 'id="config-missing-warning"' in content
     assert 'class="config-missing-warning"' in content
 
-def test_config_missing_warning_banner_rendered():
-    """The web template includes the config-missing-warning banner element for runtime notification."""
-    template_path = Path(__file__).resolve().parent.parent.parent / "src" / "detection_system" / "web" / "templates" / "index.html"
-    content = template_path.read_text(encoding="utf-8")
-    assert 'id="config-missing-warning"' in content
-    assert 'class="config-missing-warning"' in content
+    # DOM harness execution to verify banner activation when DETECTION_CONFIG is missing
+    js_path = (BASE_DIR / "src" / "detection_system" / "web" / "static" / "js" / "main.js").as_posix()
+    dom_script = f"""
+    const fs = require('fs');
+    const vm = require('vm');
+    const elements = {{ 'config-missing-warning': {{ id: 'config-missing-warning', style: {{ display: 'none' }}, textContent: '' }} }};
+    const dummyFn = () => {{}};
+    const ctxProxy = new Proxy({{}}, {{ get: () => dummyFn }});
+    const domProxy = new Proxy(elements, {{
+      get: (target, prop) => {{
+        if (!target[prop]) target[prop] = {{ id: prop, style: {{}}, textContent: '', value: '', getContext: () => ctxProxy, addEventListener: dummyFn, classList: {{ add: dummyFn, remove: dummyFn }}, setAttribute: dummyFn, getAttribute: () => null }};
+        return target[prop];
+      }}
+    }});
+    let domLoadedHandler = null;
+    const mockDoc = {{
+      getElementById: (id) => domProxy[id],
+      querySelector: (sel) => domProxy[sel.replace('#', '')],
+      querySelectorAll: () => [],
+      addEventListener: (ev, h) => {{ if (ev === 'DOMContentLoaded') domLoadedHandler = h; }},
+      createElement: () => ({{ style: {{}}, appendChild: dummyFn, setAttribute: dummyFn }})
+    }};
+    const mockWin = {{
+      document: mockDoc,
+      location: {{ origin: 'http://127.0.0.1:5000' }},
+      localStorage: {{ getItem: () => null, setItem: dummyFn }},
+      sessionStorage: {{ getItem: () => null, setItem: dummyFn }},
+      addEventListener: dummyFn
+    }};
+    const code = fs.readFileSync('{js_path}', 'utf8');
+    const ctx = vm.createContext({{
+      window: mockWin, document: mockDoc, localStorage: mockWin.localStorage, sessionStorage: mockWin.sessionStorage, location: mockWin.location,
+      console: {{ log: dummyFn, warn: dummyFn, error: dummyFn }}, setTimeout: dummyFn, clearTimeout: dummyFn, setInterval: dummyFn, clearInterval: dummyFn, cocoSsd: undefined
+    }});
+    vm.runInContext(code, ctx);
+    if (domLoadedHandler) domLoadedHandler();
+    console.log(JSON.stringify({{
+      display: elements['config-missing-warning'].style.display,
+      text: elements['config-missing-warning'].textContent
+    }}));
+    """
+    proc = subprocess.run(["node", "-e", dom_script], capture_output=True, text=True, check=True)
+    import json
+    result = json.loads(proc.stdout.strip())
+    assert result["display"] == "block", f"Expected banner style.display to be 'block', got {result['display']}"
+    assert "Configuration Missing" in result["text"]
+
+def test_canonical_index_html_copies_are_identical():
+    """
+    Verifies that src/detection_system/web/templates/index.html (canonical) and
+    src/detection_system/web/index.html are byte-for-byte identical with zero drift.
+    """
+    canonical_path = BASE_DIR / "src" / "detection_system" / "web" / "templates" / "index.html"
+    web_copy_path = BASE_DIR / "src" / "detection_system" / "web" / "index.html"
+    assert canonical_path.exists(), f"Canonical template file does not exist: {canonical_path}"
+    assert web_copy_path.exists(), f"Web copy file does not exist: {web_copy_path}"
+    assert canonical_path.read_bytes() == web_copy_path.read_bytes(), (
+        f"Drift detected: {web_copy_path} differs from canonical {canonical_path}"
+    )
 
 def test_error_message_does_not_contain_secret_values():
     """Startup validation error messages must name the missing variable but never leak secret values."""
