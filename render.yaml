@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: ecowing-detection-system
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: ALLOW_LAN
+        value: "true"
+      - key: MOBILE_ENABLED
+        value: "true"
+      - key: DETECTION_ENV
+        value: "production"
+      - key: DETECTION_OPERATOR_TOKEN
+        generateValue: true
+      - key: DETECTION_SERVICE_TOKEN
+        generateValue: true
+      - key: ECOWING_API_URL
+        value: "https://eco-wing.vercel.app"

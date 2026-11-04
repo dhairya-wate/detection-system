@@ -52,6 +52,7 @@ data/
 
 # Model Binaries (fetch script or volume mount)
 models/*.pt
+!models/yolo26n.pt
 models/*.onnx
 !models/.gitkeep
 
