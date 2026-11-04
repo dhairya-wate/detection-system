@@ -21,3 +21,5 @@ services:
         value: "secure_service_token_8vK3mP7qR4vL8wZ2"
       - key: ECOWING_API_URL
         value: "https://eco-wing.vercel.app"
+      - key: CORS_ORIGINS
+        value: "https://eco-wing.vercel.app,https://ecowing-detection-system.onrender.com,http://localhost:8080,http://127.0.0.1:8080,http://localhost:3000,http://127.0.0.1:3000,http://localhost:5000,http://127.0.0.1:5000"
