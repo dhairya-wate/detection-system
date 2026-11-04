@@ -7,13 +7,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install lightweight PyTorch CPU wheels from the official CPU index
-RUN pip install --no-cache-dir torch==2.6.0 torchvision==0.21.0 --index-url https://download.pytorch.org/whl/cpu
-
 COPY requirements.lock .
-# Install remaining dependencies while preserving lightweight CPU torch
-RUN grep -v -E "^(torch|torchvision)==" requirements.lock > requirements-docker.txt && \
-    pip install --no-cache-dir -r requirements-docker.txt
+
+# Install dependencies using official PyTorch CPU wheel index to keep container light
+RUN pip install --no-cache-dir \
+    --extra-index-url https://download.pytorch.org/whl/cpu \
+    "torch==2.6.0+cpu" \
+    "torchvision==0.21.0+cpu" \
+    -r requirements.lock
 
 COPY . .
 RUN pip install --no-cache-dir --no-deps -e .
