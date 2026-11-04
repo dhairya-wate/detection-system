@@ -7,11 +7,11 @@
   "rewrites": [
     {
       "source": "/mobile",
-      "destination": "/index.html"
+      "destination": "/mobile.html"
     },
     {
       "source": "/mobile.html",
-      "destination": "/index.html"
+      "destination": "/mobile.html"
     },
     {
       "source": "/static/(.*)",
@@ -23,3 +23,4 @@
     }
   ]
 }
+
