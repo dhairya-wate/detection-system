@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "buildCommand": null,
+  "outputDirectory": ".",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/mobile",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/mobile.html",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/static/(.*)",
+      "destination": "/static/$1"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
+    }
+  ]
+}
