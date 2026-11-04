@@ -1,4 +1,5 @@
 import sys
+import os
 
 if sys.platform == "win32":
     try:
@@ -134,6 +135,7 @@ active_mobile_websockets = set()
 pending_mobile_websockets = set()
 
 # Mobile Camera Pairing State (In-Memory Only)
+# Single-laptop version: Pairing codes and mobile session tokens are stored in memory.
 UNAMBIGUOUS_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 MAX_FAILED_IP_ATTEMPTS = 5
 
@@ -331,6 +333,7 @@ def get_detections():
         "timestamp_iso": datetime.datetime.fromtimestamp(last_update, tz=datetime.timezone.utc).isoformat(),
         "age_seconds": age,
         "stale": stale,
+        "phone_connected": len(active_mobile_websockets) > 0,
         "data": summary
     })
 
@@ -349,6 +352,7 @@ def get_system_info(request: Request):
     return {
         "status": "online",
         "worker_running": worker.is_worker_alive,
+        "phone_connected": len(active_mobile_websockets) > 0,
         "local_ip": LOCAL_IP,
         "port": DEFAULT_PORT,
         "video_stream_url": stream_url,
@@ -474,8 +478,11 @@ async def upload_waste_image(request: Request, file: UploadFile = File(...)):
     }
 
 @app.post("/api/mobile/pairing_code", dependencies=[Depends(verify_operator_token)])
-def create_pairing_code():
-    """Generates a short-lived 8-character pairing code from unambiguous alphabet for mobile onboarding (Operator Protected)."""
+def create_pairing_code(request: Request):
+    """
+    Generates a single-use 6-character pairing code from unambiguous alphabet for mobile onboarding (Operator Protected).
+    Single-laptop version: Pairing codes and mobile session tokens are stored in memory.
+    """
     if not MOBILE_ENABLED:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -484,16 +491,27 @@ def create_pairing_code():
     now = time.time()
     prune_stale_records(now)
 
-    # 8 characters using secrets.choice from unambiguous alphabet
-    code = "".join(secrets.choice(UNAMBIGUOUS_ALPHABET) for _ in range(8))
+    # Single-laptop version: Replace any previous code so only one active pairing code exists
+    active_pairing_codes.clear()
+
+    # 6 characters using secrets.choice from unambiguous alphabet (stored in memory)
+    code = "".join(secrets.choice(UNAMBIGUOUS_ALPHABET) for _ in range(6))
     active_pairing_codes[code] = {
         "created_at": now,
         "expires_at": now + PAIRING_CODE_EXPIRY_SECONDS
     }
+
+    # Resolve public phone URL from request headers or optional PUBLIC_URL
+    host = request.headers.get("x-forwarded-host") or request.headers.get("host") or f"127.0.0.1:{DEFAULT_PORT}"
+    proto = request.headers.get("x-forwarded-proto", "https" if ("trycloudflare.com" in host or "ngrok" in host) else (request.url.scheme or "http"))
+    public_url_env = os.getenv("PUBLIC_URL", os.getenv("DETECTION_PUBLIC_URL", "")).strip().rstrip("/")
+    phone_url = f"{public_url_env}/mobile" if public_url_env else f"{proto}://{host}/mobile"
+
     return {
         "status": "success",
         "pairing_code": code,
-        "expires_in": PAIRING_CODE_EXPIRY_SECONDS
+        "expires_in": PAIRING_CODE_EXPIRY_SECONDS,
+        "phone_url": phone_url
     }
 
 @app.post("/api/mobile/exchange")
@@ -543,11 +561,12 @@ def exchange_pairing_code(payload: CodeExchangeRequest, request: Request):
     if not code_data or code_data["expires_at"] <= now:
         ip_data["failed"] += 1
         if ip_data["failed"] >= MAX_FAILED_IP_ATTEMPTS:
-            # Explicit code path setting locked_until on 5th failed exchange attempt
+            # Single-laptop version: 5 failed attempts burns all active pairing codes and locks IP
+            active_pairing_codes.clear()
             ip_data["locked_until"] = now + 600.0  # 10 minute lockout
             raise HTTPException(
                 status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many failed pairing attempts. IP address locked out for 10 minutes."
+                detail="Too many failed pairing attempts. Code burned and IP address locked out for 10 minutes."
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

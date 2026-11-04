@@ -630,6 +630,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (json.status === "success") {
           updateTelemetry(json.data);
           streamStatusText.textContent = "LIVE STREAMING";
+          if (typeof json.phone_connected === "boolean") {
+            updatePhoneConnectedStatus(json.phone_connected);
+          }
         }
       } catch (e) {}
     }, 1000);
@@ -759,33 +762,106 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Mobile Pairing Code Generation
+  // Mobile Pairing Code Generation & Management
   const btnGenPairingCode = document.getElementById("btn-gen-pairing-code");
+  const btnNewPairingCode = document.getElementById("btn-new-pairing-code");
   const pairingCodeDisplay = document.getElementById("pairing-code-display");
+  const phoneConnectedBadge = document.getElementById("phone-connected-badge");
+  let pairingCountdownInterval = null;
 
-  if (btnGenPairingCode && pairingCodeDisplay) {
-    btnGenPairingCode.addEventListener("click", async () => {
-      const headers = {};
-      if (operatorToken) headers["X-Operator-Token"] = operatorToken;
+  function updatePhoneConnectedStatus(isConnected) {
+    if (!phoneConnectedBadge) return;
+    if (isConnected) {
+      phoneConnectedBadge.textContent = "📱 Phone connected (streaming live)";
+      phoneConnectedBadge.style.background = "rgba(16, 185, 129, 0.2)";
+      phoneConnectedBadge.style.color = "#10b981";
+      phoneConnectedBadge.style.borderColor = "rgba(16, 185, 129, 0.4)";
+    } else {
+      phoneConnectedBadge.textContent = "📱 No phone connected";
+      phoneConnectedBadge.style.background = "rgba(148, 163, 184, 0.1)";
+      phoneConnectedBadge.style.color = "#94a3b8";
+      phoneConnectedBadge.style.borderColor = "rgba(148, 163, 184, 0.2)";
+    }
+  }
 
-      pairingCodeDisplay.textContent = "Generating...";
-      pairingCodeDisplay.style.color = "#94a3b8";
+  async function requestPairingCode() {
+    if (!pairingCodeDisplay) return;
+    const headers = {};
+    if (operatorToken) headers["X-Operator-Token"] = operatorToken;
 
-      try {
-        const target = backendUrl ? `${backendUrl}/api/mobile/pairing_code` : "/api/mobile/pairing_code";
-        const res = await fetch(target, { method: "POST", headers });
-        const data = await res.json();
-        if (res.ok) {
-          pairingCodeDisplay.innerHTML = `Pairing Code: <span style="font-family: monospace; font-size: 16px; color: #10b981; letter-spacing: 2px;">${data.pairing_code}</span> (Valid ${data.expires_in}s)`;
-        } else {
-          pairingCodeDisplay.textContent = data.detail || "Failed to generate pairing code. Operator Token required.";
-          pairingCodeDisplay.style.color = "#ef4444";
+    if (pairingCountdownInterval) {
+      clearInterval(pairingCountdownInterval);
+      pairingCountdownInterval = null;
+    }
+
+    pairingCodeDisplay.innerHTML = `<span style="color: #94a3b8;">Requesting code...</span>`;
+
+    try {
+      const target = backendUrl ? `${backendUrl}/api/mobile/pairing_code` : "/api/mobile/pairing_code";
+      const res = await fetch(target, { method: "POST", headers });
+      const data = await res.json();
+      if (res.ok) {
+        let remainingSeconds = data.expires_in || 300;
+        const code = data.pairing_code;
+        const phoneUrl = data.phone_url || `${window.location.origin}/mobile`;
+
+        function renderCodeBox() {
+          const mins = Math.floor(remainingSeconds / 60);
+          const secs = remainingSeconds % 60;
+          const timeStr = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+          pairingCodeDisplay.innerHTML = `
+            <div style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 8px; padding: 12px; margin-top: 8px; text-align: center;">
+              <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 1px;">Pairing Code</div>
+              <div style="font-family: 'JetBrains Mono', monospace; font-size: 26px; font-weight: 800; color: #10b981; letter-spacing: 6px; margin: 4px 0;">${code}</div>
+              <div style="font-size: 12px; color: ${remainingSeconds <= 30 ? '#ef4444' : '#f59e0b'}; font-weight: 700; margin-bottom: 6px;">
+                ⏱️ Expires in: <span id="pairing-timer">${timeStr}</span>
+              </div>
+              <div style="font-size: 11px; color: #94a3b8; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 6px; word-break: break-all;">
+                Phone URL: <a href="${phoneUrl}" target="_blank" style="color: #38bdf8; text-decoration: underline;">${phoneUrl}</a>
+              </div>
+            </div>
+          `;
         }
-      } catch (e) {
-        pairingCodeDisplay.textContent = "Error: " + e.message;
-        pairingCodeDisplay.style.color = "#ef4444";
+
+        renderCodeBox();
+        if (btnNewPairingCode) btnNewPairingCode.style.display = "inline-block";
+
+        pairingCountdownInterval = setInterval(() => {
+          remainingSeconds -= 1;
+          if (remainingSeconds <= 0) {
+            clearInterval(pairingCountdownInterval);
+            pairingCountdownInterval = null;
+            pairingCodeDisplay.innerHTML = `
+              <div style="color: #ef4444; font-size: 12px; font-weight: 700; margin-top: 8px;">
+                ⚠️ Pairing code expired. Click "New code" to generate a fresh one.
+              </div>
+            `;
+          } else {
+            const timerEl = document.getElementById("pairing-timer");
+            if (timerEl) {
+              const mins = Math.floor(remainingSeconds / 60);
+              const secs = remainingSeconds % 60;
+              timerEl.textContent = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+              if (remainingSeconds <= 30) {
+                timerEl.parentElement.style.color = "#ef4444";
+              }
+            }
+          }
+        }, 1000);
+      } else {
+        pairingCodeDisplay.innerHTML = `<span style="color: #ef4444;">${data.detail || "Failed to generate pairing code. Operator Token required."}</span>`;
       }
-    });
+    } catch (e) {
+      pairingCodeDisplay.innerHTML = `<span style="color: #ef4444;">Error: ${e.message}</span>`;
+    }
+  }
+
+  if (btnGenPairingCode) {
+    btnGenPairingCode.addEventListener("click", requestPairingCode);
+  }
+  if (btnNewPairingCode) {
+    btnNewPairingCode.addEventListener("click", requestPairingCode);
   }
 
   // Instant Snapshot / Dropzone Upload

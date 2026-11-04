@@ -228,7 +228,9 @@ def test_no_hardcoded_secrets_in_codebase():
         "allowed_property_values",
         "12345678-1234-4234-8234-123456789abc",
         "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef",
-        "config-missing-warning"
+        "config-missing-warning",
+        "mobile-input-pairing-code",
+        "btn-mobile-start-camera"
     }
 
     token_regex = re.compile(r'["\']([A-Za-z0-9_\-]{20,})["\']')
@@ -307,11 +309,11 @@ def test_ip_lockout_after_five_failed_exchanges():
     ip_failed_exchange_attempts.clear()
     ip_exchange_rate_limits.clear()
 
-    # Step 1: Create valid 8-char code
+    # Step 1: Create valid 6-char code
     res_code = client.post("/api/mobile/pairing_code", headers=headers)
     assert res_code.status_code == 200
     code = res_code.json()["pairing_code"]
-    assert len(code) == 8
+    assert len(code) == 6
 
     # Step 2: Attempt 4 failed exchanges -> 401 Unauthorized
     for i in range(4):
@@ -1046,3 +1048,87 @@ def test_d10_no_hardcoded_lan_ips_in_documentation():
     assert readme_path.exists()
     content = readme_path.read_text(encoding="utf-8")
     assert "192.168.31.44" not in content, "Hardcoded LAN IP 192.168.31.44 must not appear in README.md"
+
+
+def test_pairing_code_requires_operator_token():
+    """Creating a pairing code without X-Operator-Token returns 401 Unauthorized."""
+    res = client.post("/api/mobile/pairing_code")
+    assert res.status_code == 401
+    assert "invalid or missing operator token" in res.json().get("detail", "").lower()
+
+
+def test_pairing_code_works_once_second_use_fails():
+    """A pairing code works once to obtain a session token; a second exchange attempt fails."""
+    ip_failed_exchange_attempts.clear()
+    ip_exchange_rate_limits.clear()
+    res_code = client.post("/api/mobile/pairing_code", headers={"X-Operator-Token": TEST_OPERATOR_TOKEN})
+    assert res_code.status_code == 200
+    code = res_code.json()["pairing_code"]
+    assert len(code) == 6
+
+    # First exchange succeeds
+    res1 = client.post("/api/mobile/exchange", json={"code": code})
+    assert res1.status_code == 200
+    assert "session_token" in res1.json()
+
+    # Second exchange fails (code burned)
+    res2 = client.post("/api/mobile/exchange", json={"code": code})
+    assert res2.status_code == 401
+    assert "Invalid or expired" in res2.json().get("detail", "")
+
+
+def test_pairing_code_expires_after_five_minutes(monkeypatch):
+    """A pairing code expires after 5 minutes (300 seconds)."""
+    ip_failed_exchange_attempts.clear()
+    ip_exchange_rate_limits.clear()
+    base_time = 1700000000.0
+    monkeypatch.setattr(time, "time", lambda: base_time)
+
+    res_code = client.post("/api/mobile/pairing_code", headers={"X-Operator-Token": TEST_OPERATOR_TOKEN})
+    assert res_code.status_code == 200
+    code = res_code.json()["pairing_code"]
+
+    # Advance time by 301 seconds (past 5 minutes)
+    monkeypatch.setattr(time, "time", lambda: base_time + 301.0)
+    res = client.post("/api/mobile/exchange", json={"code": code})
+    assert res.status_code == 401
+    assert "Invalid or expired" in res.json().get("detail", "")
+
+
+def test_pairing_code_burned_after_five_wrong_attempts():
+    """A valid pairing code is burned and deleted after 5 failed exchange attempts."""
+    ip_failed_exchange_attempts.clear()
+    ip_exchange_rate_limits.clear()
+
+    res_code = client.post("/api/mobile/pairing_code", headers={"X-Operator-Token": TEST_OPERATOR_TOKEN})
+    assert res_code.status_code == 200
+    code = res_code.json()["pairing_code"]
+    assert code in active_pairing_codes
+
+    # 4 wrong attempts return 401
+    for i in range(4):
+        res = client.post("/api/mobile/exchange", json={"code": f"FAIL{i}"})
+        assert res.status_code == 401
+
+    # 5th wrong attempt triggers lockout and burns active codes
+    res_5th = client.post("/api/mobile/exchange", json={"code": "FAIL99"})
+    assert res_5th.status_code == 429
+    assert "locked out" in res_5th.json().get("detail", "")
+
+    # Assert active pairing code is burned
+    assert code not in active_pairing_codes
+    assert len(active_pairing_codes) == 0
+
+
+def test_phone_page_loads_over_https_and_prompts_camera_after_connect():
+    """The phone page (/mobile) loads over HTTPS and prompts for camera only after clicking Connect."""
+    res = client.get("/mobile", headers={"X-Forwarded-Proto": "https"})
+    assert res.status_code == 200
+    html = res.text
+    assert 'id="mobile-input-pairing-code"' in html
+    assert 'id="btn-mobile-start-camera"' in html
+    assert 'Connect' in html
+
+    # Camera getUserMedia must be inside Connect button handler, not on initial script execution
+    assert 'btnStart.addEventListener' in html
+    assert 'startCamera()' in html

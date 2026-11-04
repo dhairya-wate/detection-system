@@ -94,6 +94,15 @@ flowchart TD
 
 ---
 
+## 📱 Phone Camera
+
+1. Set `DETECTION_OPERATOR_TOKEN` (32+ characters) and run the app on 127.0.0.1:5000.
+2. Start the tunnel: `cloudflared tunnel --url http://localhost:5000`
+3. Open the printed address on the laptop, log in with the operator token, click "Get pairing code".
+4. On the phone, open the phone URL shown, type the code, tap Connect, allow the camera.
+
+---
+
 ## 🔒 Security Architecture & Guardrails
 
 1. **Operator Authorization (`DETECTION_OPERATOR_TOKEN`):**
