@@ -31,6 +31,10 @@ SAMPLE_DIR = _FixturePath(FIXTURES_DIR)
 # 2. Operator token must contain at least 12 distinct characters.
 # 3. Operator token must not consist of repeated substrings or periodic patterns (e.g. "abcd" * 9 or "a" * 36).
 # 4. Must be generated using a cryptographically secure random source (e.g. secrets.token_urlsafe(32)).
+# Deployment Environment Mode: production requires explicit API URL configuration
+DETECTION_ENV = os.getenv("DETECTION_ENV", "production").strip().lower()
+IS_DEVELOPMENT = DETECTION_ENV in ["development", "dev", "test", "testing", "local"]
+
 OPERATOR_TOKEN = os.getenv("DETECTION_OPERATOR_TOKEN", "").strip()
 
 if not OPERATOR_TOKEN:
@@ -55,6 +59,20 @@ if is_repeated_pattern or len(set(OPERATOR_TOKEN)) < 12:
         "(e.g. python -c 'import secrets; print(secrets.token_urlsafe(32))')."
     )
 
+# Service Token for authenticated service-to-service communication with EcoWing
+DETECTION_SERVICE_TOKEN = os.getenv("DETECTION_SERVICE_TOKEN", "").strip()
+if not DETECTION_SERVICE_TOKEN:
+    raise RuntimeError(
+        "CRITICAL SECURITY CONFIGURATION ERROR: DETECTION_SERVICE_TOKEN is unset. "
+        "A secure service token of at least 32 characters must be configured in environment."
+    )
+
+if len(DETECTION_SERVICE_TOKEN) < 32:
+    raise RuntimeError(
+        f"CRITICAL SECURITY CONFIGURATION ERROR: DETECTION_SERVICE_TOKEN must be at least 32 characters long "
+        f"(currently {len(DETECTION_SERVICE_TOKEN)} characters)."
+    )
+
 # Trusted Proxies Topology:
 # Exact IP addresses allowed to provide client IP via X-Forwarded-For.
 # Default is an empty set/list, so proxy-forwarded IPs are unsupported until verified
@@ -71,8 +89,19 @@ DEFAULT_SOURCE = os.getenv("DETECTION_SOURCE", os.getenv("VIDEO_SOURCE", "simula
 DETECTION_MAX_FPS = float(os.getenv("DETECTION_MAX_FPS", "5.0"))
 DETECTION_STALE_AFTER_SECONDS = float(os.getenv("DETECTION_STALE_AFTER_SECONDS", "5.0"))
 
-# EcoWing Ingestion & Outbox Configuration
-ECOWING_INGEST_URL = os.getenv("ECOWING_INGEST_URL", "")
+# EcoWing Ingestion & Command Center Integration
+_raw_ecowing_api_url = os.getenv("ECOWING_API_URL", "").strip().rstrip("/")
+if not _raw_ecowing_api_url:
+    if not IS_DEVELOPMENT:
+        raise RuntimeError(
+            "CRITICAL SECURITY CONFIGURATION ERROR: ECOWING_API_URL is unset in production mode. "
+            "A valid EcoWing Command Center API URL must be configured (or set DETECTION_ENV=development for local development)."
+        )
+    ECOWING_API_URL = "http://127.0.0.1:8080"
+else:
+    ECOWING_API_URL = _raw_ecowing_api_url
+
+ECOWING_INGEST_URL = os.getenv("ECOWING_INGEST_URL", f"{ECOWING_API_URL}/api/drone/detection" if ECOWING_API_URL else "")
 ECOWING_DEVICE_TOKEN = os.getenv("ECOWING_DEVICE_TOKEN", "")
 DRONE_ID = os.getenv("DRONE_ID", "EcoWing-01")
 OUTBOX_DB_PATH = BASE_DIR / "data" / "outbox.db"

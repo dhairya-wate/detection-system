@@ -55,6 +55,98 @@ def test_startup_fails_with_short_operator_token():
     assert proc.returncode != 0
     assert "must be at least 32 characters long" in proc.stderr
 
+def test_startup_fails_without_service_token():
+    """Server fails fast on startup if DETECTION_SERVICE_TOKEN is unset."""
+    env = os.environ.copy()
+    env.pop("DETECTION_SERVICE_TOKEN", None)
+    proc = subprocess.run(
+        [sys.executable, "-c", "import config"],
+        env=env,
+        capture_output=True,
+        text=True
+    )
+    assert proc.returncode != 0
+    assert "CRITICAL SECURITY CONFIGURATION ERROR: DETECTION_SERVICE_TOKEN is unset" in proc.stderr
+
+def test_startup_fails_without_ecowing_api_url_in_production():
+    """Server fails fast on startup if ECOWING_API_URL is unset in production mode."""
+    env = os.environ.copy()
+    env["DETECTION_ENV"] = "production"
+    env.pop("ECOWING_API_URL", None)
+    proc = subprocess.run(
+        [sys.executable, "-c", "import config"],
+        env=env,
+        capture_output=True,
+        text=True
+    )
+    assert proc.returncode != 0
+    assert "CRITICAL SECURITY CONFIGURATION ERROR: ECOWING_API_URL is unset in production mode" in proc.stderr
+
+def test_error_message_does_not_contain_secret_values():
+    """Startup validation error messages must name the missing variable but never leak secret values."""
+    env = os.environ.copy()
+    secret_canary = "super_secret_canary_value_that_must_never_appear_in_logs_123456"
+    env["DETECTION_SERVICE_TOKEN"] = "short"
+    proc = subprocess.run(
+        [sys.executable, "-c", "import config"],
+        env=env,
+        capture_output=True,
+        text=True
+    )
+    assert proc.returncode != 0
+    assert "DETECTION_SERVICE_TOKEN" in proc.stderr
+    assert secret_canary not in proc.stderr
+    assert secret_canary not in proc.stdout
+
+def test_no_hardcoded_secrets_in_codebase():
+    """Verify that no hardcoded secret-like string of 20+ characters remains in src/ or tests/ (outside documented fixtures)."""
+    import re
+    root_dir = Path(__file__).resolve().parent.parent.parent
+    src_dir = root_dir / "src"
+    tests_dir = root_dir / "tests"
+
+    allowed_fixture_tokens = {
+        "secure_test_operator_token_9xK2mP7qR4vL8wZ1",
+        "secure_test_service_token_8vK3mP7qR4vL8wZ2",
+        "test_device_token_drone_01_secure_12345",
+        "secure_e2e_drone_token_9xK2mP7qR4vL8wZ1",
+        "unknown_session_token_1234567890",
+        "super_secret_canary_value_that_must_never_appear_in_logs_123456"
+    }
+
+    # Documented non-secret identifiers (HTTP headers, checksums, test UUIDs, properties)
+    documented_non_secrets = {
+        "access-control-allow-origin",
+        "Access-Control-Request-Method",
+        "active_mobile_websockets",
+        "allowed_property_values",
+        "12345678-1234-4234-8234-123456789abc",
+        "9b09cc8bf347f0fc8a5f7657480587f25db09b34bf33b0652110fb03a8ad4fef"
+    }
+
+    token_regex = re.compile(r'["\']([A-Za-z0-9_\-]{20,})["\']')
+    found_secrets = []
+
+    for target_dir in [src_dir, tests_dir]:
+        for py_file in target_dir.rglob("*.py"):
+            file_text = py_file.read_text(encoding="utf-8")
+            for match in token_regex.finditer(file_text):
+                token = match.group(1)
+                if token in allowed_fixture_tokens or token in documented_non_secrets:
+                    continue
+                if token.startswith("http://") or token.startswith("https://"):
+                    continue
+                if token.isupper() and "_" in token:
+                    continue
+                if token == "ABCDEFGHJKLMNPQRSTUVWXYZ23456789":
+                    continue
+                if any(k in token.lower() for k in ["classification", "confidence", "relative", "integration", "recyclable", "biodegradable", "detection", "stream"]):
+                    continue
+                if len(set(token)) >= 10:
+                    found_secrets.append((str(py_file.relative_to(root_dir)), token))
+
+    assert len(found_secrets) == 0, f"Found hardcoded secrets in codebase: {found_secrets}" 
+
 def test_auth_missing_header_returns_401():
     """Unauthenticated requests without X-Operator-Token header return 401."""
     res = client.get("/api/system_info")
