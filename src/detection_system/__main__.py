@@ -5,6 +5,14 @@ Entry point for running the detection system module directly:
 import sys
 from pathlib import Path
 
+# Ensure detection_system package and src directories are in sys.path
+package_dir = Path(__file__).resolve().parent
+if str(package_dir) not in sys.path:
+    sys.path.insert(0, str(package_dir))
+src_dir = package_dir.parent
+if str(src_dir) not in sys.path:
+    sys.path.insert(0, str(src_dir))
+
 # Ensure UTF-8 output on Windows consoles
 if sys.platform == "win32":
     try:
@@ -49,4 +57,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

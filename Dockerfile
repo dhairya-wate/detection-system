@@ -28,5 +28,6 @@ ENV PORT=10000
 ENV ALLOW_LAN=true
 ENV MOBILE_ENABLED=true
 ENV DETECTION_ENV=production
+ENV PYTHONPATH="/app/src/detection_system:/app/src"
 
 CMD ["python", "-m", "detection_system"]
