@@ -766,6 +766,8 @@ async function getWasteTelemetry() {
         mobileView.classList.add('active');
         btnDesk.classList.remove('active');
         btnMob.classList.add('active');
+        const warn = document.getElementById('config-missing-warning');
+        if (warn) warn.style.display = 'none';
       } else {
         desktopView.classList.remove('hidden');
         mobileView.classList.remove('active');
@@ -815,6 +817,9 @@ async function getWasteTelemetry() {
       let mobileSessionToken = null; // Stored ONLY in memory on the page
       let retryTimer = null;
       let streamInterval = null;
+      let latestFeedback = null;
+      const streamCanvas = document.createElement('canvas');
+      const streamCtx = streamCanvas.getContext('2d');
 
       const urlParams = new URLSearchParams(window.location.search);
       const prefillCode = urlParams.get('code');
@@ -854,8 +859,15 @@ async function getWasteTelemetry() {
                 }
                 if (!streamInterval) {
                   streamInterval = setInterval(() => {
-                    if (!mobileWs || !mobileWsAuthenticated || !isBroadcasting || c.width === 0) return;
-                    c.toBlob((blob) => {
+                    if (!mobileWs || !mobileWsAuthenticated || !isBroadcasting || !v || v.readyState < 2) return;
+                    const w = v.videoWidth || 640;
+                    const h = v.videoHeight || 480;
+                    if (streamCanvas.width !== w || streamCanvas.height !== h) {
+                      streamCanvas.width = w;
+                      streamCanvas.height = h;
+                    }
+                    streamCtx.drawImage(v, 0, 0, w, h);
+                    streamCanvas.toBlob((blob) => {
                       if (blob && mobileWs && mobileWs.readyState === WebSocket.OPEN) {
                         blob.arrayBuffer().then((buffer) => {
                           mobileWs.send(buffer);
@@ -863,6 +875,31 @@ async function getWasteTelemetry() {
                       }
                     }, "image/jpeg", 0.65);
                   }, 80);
+                }
+              } else if (msg.type === "detection_feedback" && msg.data) {
+                latestFeedback = msg.data;
+                const items = msg.data.items || [];
+                if (items.length > 0) {
+                  const top = items[0];
+                  const confPct = Math.round((top.confidence || 0) * 100);
+                  if (bannerName) bannerName.textContent = `${top.name} (${confPct}%)`;
+                  if (bannerTags) {
+                    let badges = '';
+                    if (String(top.recyclable).toLowerCase() === 'yes') {
+                      badges += '<span class="mobile-mini-tag tag-rec-yes">♻️ Recyclable</span> ';
+                    } else {
+                      badges += '<span class="mobile-mini-tag tag-rec-no">🚫 Non-Rec</span> ';
+                    }
+                    if (String(top.biodegradable).toLowerCase() === 'yes') {
+                      badges += '<span class="mobile-mini-tag tag-bio-yes">🌱 Bio</span>';
+                    }
+                    bannerTags.innerHTML = badges;
+                  }
+                  if (bannerBin) bannerBin.textContent = `Target: ${top.bin || 'Waste Bin'}`;
+                } else {
+                  if (bannerName) bannerName.textContent = "AI Waste Scanner Active";
+                  if (bannerTags) bannerTags.innerHTML = "";
+                  if (bannerBin) bannerBin.textContent = "Aim camera at bottle, can, paper, book, cardboard, or food scrap";
                 }
               }
             } catch (e) {}
@@ -977,13 +1014,47 @@ async function getWasteTelemetry() {
       }
 
       async function processFrame() {
-        if (v.readyState === 4) {
+        if (v.readyState >= 2) {
           const w = v.videoWidth || 640;
           const h = v.videoHeight || 480;
           if (c.width !== w || c.height !== h) {
             c.width = w; c.height = h;
           }
           ctx.drawImage(v, 0, 0, w, h);
+
+          // Render tactical AI bounding boxes on camera view
+          if (latestFeedback && latestFeedback.items && latestFeedback.items.length > 0) {
+            ctx.save();
+            latestFeedback.items.forEach(it => {
+              if (!it.bbox || it.bbox.length !== 4) return;
+              const [x1, y1, x2, y2] = it.bbox;
+              const isRec = String(it.recyclable).toLowerCase() === 'yes';
+              const boxColor = isRec ? '#38bdf8' : '#10b981';
+
+              // Glowing bounding box
+              ctx.strokeStyle = boxColor;
+              ctx.lineWidth = 3;
+              ctx.shadowColor = boxColor;
+              ctx.shadowBlur = 8;
+              ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+              ctx.shadowBlur = 0;
+
+              // Label badge
+              const confPct = Math.round((it.confidence || 0) * 100);
+              const label = `${it.name || it.raw_class} ${confPct}%`;
+              ctx.font = 'bold 14px system-ui, -apple-system, sans-serif';
+              const tw = ctx.measureText(label).width;
+              ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
+              ctx.fillRect(x1, Math.max(0, y1 - 24), tw + 12, 24);
+
+              ctx.fillStyle = boxColor;
+              ctx.fillRect(x1, Math.max(0, y1 - 24), 3, 24);
+
+              ctx.fillStyle = '#ffffff';
+              ctx.fillText(label, x1 + 8, Math.max(17, y1 - 7));
+            });
+            ctx.restore();
+          }
         }
         requestAnimationFrame(processFrame);
       }
