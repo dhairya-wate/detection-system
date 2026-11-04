@@ -7,6 +7,8 @@ services:
     region: oregon
     healthCheckPath: /api/detections
     envVars:
+      - key: PORT
+        value: "10000"
       - key: ALLOW_LAN
         value: "true"
       - key: MOBILE_ENABLED
@@ -14,8 +16,8 @@ services:
       - key: DETECTION_ENV
         value: "production"
       - key: DETECTION_OPERATOR_TOKEN
-        generateValue: true
+        value: "secure_operator_token_9xK2mP7qR4vL8wZ1"
       - key: DETECTION_SERVICE_TOKEN
-        generateValue: true
+        value: "secure_service_token_8vK3mP7qR4vL8wZ2"
       - key: ECOWING_API_URL
         value: "https://eco-wing.vercel.app"
