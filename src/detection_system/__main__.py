@@ -20,6 +20,15 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+# Load local .env configuration if present
+try:
+    from dotenv import load_dotenv
+    env_file = package_dir.parents[1] / ".env"
+    if env_file.exists():
+        load_dotenv(dotenv_path=env_file)
+except Exception:
+    pass
+
 import uvicorn
 from detection_system.config import (
     DEFAULT_HOST, DEFAULT_PORT, get_local_ip, MODEL_PATH, MAX_UPLOAD_SIZE_BYTES
