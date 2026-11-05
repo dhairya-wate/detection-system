@@ -13,6 +13,7 @@ import datetime
 import json
 import struct
 import asyncio
+import threading
 import base64
 import secrets
 import logging
@@ -132,6 +133,61 @@ worker = DetectionWorker(
 )
 active_websockets = set()
 active_mobile_websockets = set()
+
+# Cumulative Analytics State & In-Memory Store
+CUMULATIVE_LOCK = threading.Lock()
+cumulative_history_events = []
+cumulative_class_counts = {}
+cumulative_total_unique = 0
+last_tracked_summary_time = 0.0
+
+CLASS_PALETTE = [
+    '#4453e0', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+    '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#14b8a6'
+]
+
+def update_cumulative_analytics(summary: dict, timestamp: float):
+    global last_tracked_summary_time, cumulative_total_unique
+    if not summary or timestamp == last_tracked_summary_time:
+        return
+    items = summary.get('items', [])
+    if not items:
+        return
+    with CUMULATIVE_LOCK:
+        last_tracked_summary_time = timestamp
+        for it in items:
+            cname = it.get('class_name') or it.get('label') or 'Unknown'
+            conf = float(it.get('confidence', 0.0))
+            cid = it.get('id', f"EV-{len(cumulative_history_events) + 1}")
+            bbox = it.get('bbox', {})
+            center = it.get('center') or [
+                round(bbox.get('y', 0) + bbox.get('h', 0) / 2, 2),
+                round(bbox.get('x', 0) + bbox.get('w', 0) / 2, 2)
+            ]
+            mtype = it.get('material_type')
+            if not mtype:
+                if it.get('recyclable'):
+                    mtype = 'Recyclable'
+                elif it.get('biodegradable'):
+                    mtype = 'Biodegradable'
+                else:
+                    mtype = 'Non-Recyclable'
+
+            cumulative_class_counts[cname] = cumulative_class_counts.get(cname, 0) + 1
+            cumulative_total_unique += 1
+
+            ev_obj = {
+                'event_id': str(cid),
+                'class_name': cname,
+                'material_type': mtype,
+                'confidence': conf,
+                'center': center,
+                'timestamp': datetime.datetime.fromtimestamp(timestamp, tz=datetime.timezone.utc).strftime('%H:%M:%S')
+            }
+            cumulative_history_events.insert(0, ev_obj)
+            if len(cumulative_history_events) > 200:
+                cumulative_history_events.pop()
+
 pending_mobile_websockets = set()
 
 # Mobile Camera Pairing State (In-Memory Only)
@@ -323,6 +379,7 @@ async def video_feed(request: Request, overlay: bool = True):
 def get_detections():
     """Returns the latest real-time waste classification, counts, and staleness metadata as public JSON."""
     summary, last_update = worker.get_latest_summary_and_update_time()
+    update_cumulative_analytics(summary, last_update)
     now = time.time()
     age = max(0.0, round(now - last_update, 3))
     stale = age > DETECTION_STALE_AFTER_SECONDS
@@ -336,6 +393,72 @@ def get_detections():
         "phone_connected": len(active_mobile_websockets) > 0,
         "data": summary
     })
+
+@app.get("/api/stats")
+def get_stats():
+    """Returns aggregated dashboard metrics matching EcoWing Command Center schema."""
+    summary, last_update = worker.get_latest_summary_and_update_time()
+    update_cumulative_analytics(summary, last_update)
+    with CUMULATIVE_LOCK:
+        counts = cumulative_class_counts.copy()
+        tot = cumulative_total_unique
+    fps = round(getattr(worker, "fps_limit", 30.0), 1)
+    is_live = (time.time() - last_update) <= DETECTION_STALE_AFTER_SECONDS
+    return JSONResponse(content={
+        "running": is_live,
+        "active_tracks": len(summary.get("items", [])),
+        "total_unique": tot,
+        "class_counts": counts,
+        "fps": fps,
+        "phone_connected": len(active_mobile_websockets) > 0,
+        "drone_connected": is_live,
+        "system_status": "nominal" if is_live else "idle"
+    })
+
+@app.get("/api/chart_data")
+def get_chart_data():
+    """Returns bar and doughnut chart data for classes and ecological categories."""
+    summary, last_update = worker.get_latest_summary_and_update_time()
+    update_cumulative_analytics(summary, last_update)
+    with CUMULATIVE_LOCK:
+        sorted_counts = sorted(cumulative_class_counts.items(), key=lambda x: x[1], reverse=True)
+        events = list(cumulative_history_events)
+
+    labels = [k for k, _ in sorted_counts]
+    data = [v for _, v in sorted_counts]
+    colors = [CLASS_PALETTE[i % len(CLASS_PALETTE)] for i in range(len(labels))]
+
+    rec = 0
+    bio = 0
+    other = 0
+    for ev in events:
+        m = str(ev.get("material_type", "")).lower()
+        if "recyclable" in m and "non" not in m:
+            rec += 1
+        elif "bio" in m:
+            bio += 1
+        else:
+            other += 1
+
+    return JSONResponse(content={
+        "labels": labels,
+        "data": data,
+        "colors": colors,
+        "eco": {
+            "labels": ["Recyclable", "Biodegradable", "Non-Recyclable"],
+            "data": [rec, bio, other],
+            "colors": ["#10b981", "#84cc16", "#f59e0b"]
+        }
+    })
+
+@app.get("/api/events")
+def get_events():
+    """Returns up to 200 recent detection events, newest first."""
+    summary, last_update = worker.get_latest_summary_and_update_time()
+    update_cumulative_analytics(summary, last_update)
+    with CUMULATIVE_LOCK:
+        events = list(cumulative_history_events)
+    return JSONResponse(content=events)
 
 @app.get("/api/system_info", dependencies=[Depends(verify_operator_token)])
 def get_system_info(request: Request):
